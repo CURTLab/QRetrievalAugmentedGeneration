@@ -170,7 +170,7 @@ void MainWindow::finishedPrompt()
 {
 	m_ui->buttonSend->setEnabled(true);
 
-	m_receivedAnswer += "\n\n**Sources:** " + m_sources.join(", ");
+	m_receivedAnswer += "\n\n**Sources:** " + m_sources.join(", ") + "\n\n";
 
 	m_ui->chat->setMarkdown(m_receivedAnswer);
 }

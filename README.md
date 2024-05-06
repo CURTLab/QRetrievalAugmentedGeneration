@@ -15,7 +15,7 @@ QRetrievalAugmentedGeneration is a Qt/C++ project designed to facilitate questio
 ## Dependencies
 * **Qt:** The project is built using the [Qt framework](https://www.qt.io).
 * **Ollama:** The language model integration is facilitated by [Ollama](https://ollama.com/).
-* **LLMs:** `Mistral`: Run ``olama run mistral`` and `nomic-embed-text`: Run ``nomic-embed-text`` in the console
+* **LLMs:** `Mistral`: Run ```ollama run mistral``` and `nomic-embed-text`: Run ```ollama run nomic-embed-text``` in the console
 
 ## Contributing
 Contributions to QRetrievalAugmentedGeneration are welcome! If you have ideas for new features, improvements, or bug fixes, feel free to open an issue or submit a pull request.

@@ -42,6 +42,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 	// Connect signals and slots
 	connect(m_ui->buttonSend, &QPushButton::clicked, this, &MainWindow::sendPrompt);
+	connect(m_ui->editQuestion, &QLineEdit::returnPressed, this, &MainWindow::sendPrompt);
 	connect(&m_client, &OllamaClient::tokenReceived, this, &MainWindow::tokenReceived);
 	connect(&m_client, &OllamaClient::finishedPrompt, this, &MainWindow::finishedPrompt);
 
@@ -58,10 +59,11 @@ MainWindow::MainWindow(QWidget *parent)
 	});
 
 	m_ui->buttonSend->setEnabled(false);
+	m_ui->editQuestion->setEnabled(false);
 
 	// Load the documents
 	QTimer::singleShot(0, this, [this]() {
-		QVector<Document> documents;
+		std::unordered_map<QString,QVector<Document>> documents;
 
 		m_bar->setVisible(true);
 		m_bar->setMaximum(0);
@@ -75,6 +77,7 @@ MainWindow::MainWindow(QWidget *parent)
 			QMessageBox::warning(this, "Warning", "No data directory found. Please add PDF files to the data directory.");
 		}
 
+		int totalChunks = 0;
 		for (const auto& file : dir.entryInfoList(QDir::Files)) {
 			pdf.load(file.absoluteFilePath());
 
@@ -83,18 +86,40 @@ MainWindow::MainWindow(QWidget *parent)
 			if (m_db.hasCollection(file.absoluteFilePath()))
 				continue;
 
-			// Split the document into chunks of 800 characters with a 80 character overlap
+			QVector<Document> docs;
+
+			// Split the document into chunks with overlap
 			QString text;
 			for (int i = 0; i < pdf.pageCount(); ++i) {
+				// Parse page
 				QString page = pdf.getAllText(i).text();
+				// remove 0xEFBFBE
+				page = page.replace("\xEF\xBF\xBE", "");
+				page = page.replace("\r\n", "\n");
+				page = page.replace(" \n", "\n");
+				Q_ASSERT(!page.contains("\xEF\xBF\xBE"));
 
 				text += page;
 				int chunk = 0;
 
-				while (text.length() > 800) {
+				int index = -1;
+				while (text.length() > m_minTextChunk) {
 					QString id = QString("%1:%2:%3").arg(file.fileName()).arg(i+1).arg(chunk);
-					documents.append({ id, text.left(800), -1, 0.0 });
-					text = text.mid(800 - 80);
+
+					// Split the text into chunks at whitespace and therefore avoid cutting words in half
+					index = text.indexOf(' ', m_minTextChunk);
+					if (index == -1)
+						break;
+
+					docs.push_back({ id, text.left(index), -1, 0.0 });
+
+					// Split the text at the first whitespace after the min text chunk with overlap
+					index = text.indexOf(' ', m_minTextChunk - m_textOverlap);
+					if (index == -1)
+						index = text.indexOf(' ', m_minTextChunk / 2);
+					Q_ASSERT(index != -1);
+
+					text = text.mid(index + 1);
 					++chunk;
 				}
 
@@ -103,22 +128,29 @@ MainWindow::MainWindow(QWidget *parent)
 
 			// Add the last chunk
 			QString id = QString("%1:%2:%3").arg(file.fileName()).arg(pdf.pageCount()).arg(documents.size());
-			documents.append({ id, text, -1, 0.0 });
+			docs.push_back({ id, text, -1, 0.0 });
 
-			m_db.addCollection(file.absoluteFilePath());
+			totalChunks += docs.size();
+			documents[file.absoluteFilePath()] = docs;
 		}
 
-		if (!documents.empty()) {
+		m_ui->statusbar->showMessage("Generating embeddings ...");
+
+		if (!documents.empty() && totalChunks > 0) {
 			m_bar->setValue(0);
-			m_bar->setMaximum(documents.size());
-			for (const Document& doc : documents) {
-				m_db.addDocument(doc.id, doc.text, m_client.embeddingsBlocking(doc.text));
-				m_bar->setValue(m_bar->value() + 1);
-				qApp->processEvents();
+			m_bar->setMaximum(totalChunks);
+			for (const auto& document : documents) {
+				for (const Document& doc : document.second) {
+					m_db.addDocument(doc.id, doc.text, m_client.embeddingsBlocking(doc.text));
+					m_bar->setValue(m_bar->value() + 1);
+					qApp->processEvents();
+				}
+				m_db.addCollection(document.first);
 			}
 		}
 
 		m_ui->buttonSend->setEnabled(true);
+		m_ui->editQuestion->setEnabled(true);
 		m_bar->setVisible(false);
 		m_ui->statusbar->showMessage("Ready");
 	});
@@ -131,6 +163,7 @@ MainWindow::~MainWindow()
 void MainWindow::sendPrompt()
 {
 	m_ui->buttonSend->setEnabled(false);
+	m_ui->editQuestion->setEnabled(false);
 
 	QString question = m_ui->editQuestion->text();
 	m_ui->editQuestion->clear();
@@ -140,9 +173,11 @@ void MainWindow::sendPrompt()
 
 	QVector<double> targetEmbedding = m_client.embeddingsBlocking(question);
 
+	const int topk = 5;
+
 	m_sources.clear();
 	QString context;
-	auto documents = m_db.findDocuments(targetEmbedding, 5);
+	auto documents = m_db.findDocuments(targetEmbedding, topk);
 	for (const Document& doc : documents) {
 		context += doc.text + "\n\n";
 		QString source = doc.id;
@@ -169,6 +204,7 @@ void MainWindow::tokenReceived(const QString &token)
 void MainWindow::finishedPrompt()
 {
 	m_ui->buttonSend->setEnabled(true);
+	m_ui->editQuestion->setEnabled(true);
 
 	m_receivedAnswer += "\n\n**Sources:** " + m_sources.join(", ") + "\n\n";
 

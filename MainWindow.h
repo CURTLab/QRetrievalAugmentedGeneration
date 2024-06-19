@@ -58,5 +58,9 @@ private:
 									"Answer only the question based on the above context and do not start a conversation: %2";
 	QProgressBar *m_bar;
 
+	// Settings
+	int m_textOverlap = 80;
+	int m_minTextChunk = 800;
+
 };
 #endif // MAINWINDOW_H

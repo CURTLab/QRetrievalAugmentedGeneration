@@ -105,9 +105,10 @@ QVector<double> OllamaClient::embeddingsBlocking(const QString &text)
 	QVector<double> embeddings;
 
 	QJsonArray arr = responseDoc["embedding"].toArray();
-	for (const QJsonValue &val : arr) {
-		embeddings.append((double)val.toDouble());
-	}
+	embeddings.reserve(arr.size());
+
+	for (const QJsonValue &val : arr)
+		embeddings.append(val.toDouble());
 
 	return embeddings;
 }

@@ -47,8 +47,9 @@ public:
 	QString collectionByIndex(int index);
 
 	void addDocument(const QString& id, const QString& topic, const QVector<double>& embedding);
+	bool removeDocument(const QString& id);
 
-	QVector<Document> findDocuments(const QVector<double>& targetEmbedding, int k = 5);
+	QVector<Document> findDocuments(const QVector<double>& targetEmbedding, int topk = 5);
 
 	std::optional<Document> documentByIndex(int index);
 

@@ -117,7 +117,19 @@ void EmbeddingDatabase::addDocument(const QString &id, const QString &topic, con
 	}
 }
 
-QVector<Document> EmbeddingDatabase::findDocuments(const QVector<double> &targetEmbedding, int k)
+bool EmbeddingDatabase::removeDocument(const QString &id)
+{
+	QSqlQuery deleteQuery;
+	deleteQuery.prepare("DELETE FROM embeddings_queue WHERE id = :id");
+	deleteQuery.bindValue(":id", id);
+	if (!deleteQuery.exec()) {
+		emit error("Error deleting document: " + deleteQuery.lastError().text());
+		return false;
+	}
+	return true;
+}
+
+QVector<Document> EmbeddingDatabase::findDocuments(const QVector<double> &targetEmbedding, int topk)
 {
 	QSqlQuery query;
 	query.prepare("SELECT id, vector FROM embeddings_queue WHERE operation = 1");
@@ -130,12 +142,17 @@ QVector<Document> EmbeddingDatabase::findDocuments(const QVector<double> &target
 	QVector<Document> closestDocuments;
 	while (query.next()) {
 		QString id = query.value("id").toString();
-		QByteArray vectorData = query.value("vector").toByteArray();
+		const QByteArray vectorData = query.value("vector").toByteArray();
+		if (vectorData.isEmpty()) {
+			qWarning() << "Empty embedding for document with id" << id << query.lastError().text();
+			continue;
+		}
+
 		QVector<double> embedding;
 		embedding.resize(vectorData.size() / sizeof(double));
 		std::memcpy(embedding.data(), vectorData.constData(), vectorData.size());
 
-		double similarity = calculateSimilarity(targetEmbedding, embedding);
+		const double similarity = calculateSimilarity(targetEmbedding, embedding);
 		closestDocuments.append({id, "", -1, similarity});
 	}
 
@@ -143,12 +160,12 @@ QVector<Document> EmbeddingDatabase::findDocuments(const QVector<double> &target
 	std::sort(closestDocuments.begin(), closestDocuments.end(), [](const Document& a, const Document& b) {
 		return a.value > b.value;
 	});
-	closestDocuments = closestDocuments.mid(0, k);
+	closestDocuments = closestDocuments.mid(0, topk);
 
-	// populate text and other metadata
+	// Populate text and other metadata
 	for (Document& doc : closestDocuments) {
 		QSqlQuery metadataQuery;
-		metadataQuery.prepare("SELECT topic FROM embeddings_queue WHERE id = :id");
+		metadataQuery.prepare("SELECT seq_id, topic FROM embeddings_queue WHERE id = :id");
 		metadataQuery.bindValue(":id", doc.id);
 		if (!metadataQuery.exec()) {
 			emit error("Error selecting metadata: " + metadataQuery.lastError().text());
@@ -157,17 +174,8 @@ QVector<Document> EmbeddingDatabase::findDocuments(const QVector<double> &target
 
 		if (metadataQuery.next()) {
 			doc.text = metadataQuery.value("topic").toString();
+			doc.index = metadataQuery.value("seq_id").toInt();
 		}
-
-		// Find index in db
-		QSqlQuery indexQuery;
-		indexQuery.prepare("SELECT seq_id FROM embeddings_queue WHERE id = :id");
-		indexQuery.bindValue(":id", doc.id);
-		if (!indexQuery.exec()) {
-			emit error("Error selecting index: " + indexQuery.lastError().text());
-			continue;
-		}
-		doc.index = indexQuery.next() ? indexQuery.value("seq_id").toInt() : -1;
 	}
 
 	return closestDocuments;

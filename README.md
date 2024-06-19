@@ -2,7 +2,7 @@
 Userinterface for LLM question-answering on PDF documents
 
 ## Overview
-QRetrievalAugmentedGeneration is a Qt/C++ project designed to facilitate question-answering tasks on PDF documents. Leveraging the power of language models, particularly Mistral, and retrieval augmented generation techniques, it provides a user-friendly interface for querying PDF content.
+QRetrievalAugmentedGeneration is a Qt/C++ project designed to facilitate question-answering tasks on PDF documents. Leveraging the power of language models, particularly Mistral, and retrieval augmented generation techniques, it provides a interface for querying PDF content and references the used sources including page numbers.
 
 ![preview](https://github.com/CURTLab/QRetrievalAugmentedGeneration/blob/main/Preview.PNG)
 
@@ -15,7 +15,7 @@ QRetrievalAugmentedGeneration is a Qt/C++ project designed to facilitate questio
 ## Dependencies
 * **Qt:** The project is built using the [Qt framework](https://www.qt.io).
 * **Ollama:** The language model integration is facilitated by [Ollama](https://ollama.com/).
-* **LLMs:** `Mistral`: Run ```ollama run mistral``` and `nomic-embed-text`: Run ```ollama run nomic-embed-text``` in the console
+* **LLMs:** `Mistral`: Run ```ollama pull mistral``` and `nomic-embed-text`: Run ```ollama pull nomic-embed-text``` in the console
 
 ## Contributing
 Contributions to QRetrievalAugmentedGeneration are welcome! If you have ideas for new features, improvements, or bug fixes, feel free to open an issue or submit a pull request.
